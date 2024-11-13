@@ -57,6 +57,8 @@ def calculate_finger_lengths(image_path):
             tip = green_centers[0]
             dip = green_centers[1]
             pip = green_centers[2]
+            corner = [dip[0], tip[1]]
+            tip_to_corner = (tip[0] - corner[0])
 
             # Measure distances in pixels
             tip_to_dip_px = math.sqrt((dip[0] - tip[0]) ** 2 + (dip[1] - tip[1]) ** 2)
@@ -65,8 +67,9 @@ def calculate_finger_lengths(image_path):
             # Convert pixel distances to centimeters
             tip_to_dip_cm = tip_to_dip_px * scale_cm_per_pixel
             dip_to_pip_cm = dip_to_pip_px * scale_cm_per_pixel
+            tip_to_corner_cm = tip_to_corner * scale_cm_per_pixel
 
-            return tip_to_dip_cm, dip_to_pip_cm
+            return tip_to_dip_cm, dip_to_pip_cm, tip_to_corner_cm
 
         else:
             raise ValueError("Could not detect three stickers in the image.")
@@ -75,7 +78,19 @@ def calculate_finger_lengths(image_path):
 
 # Example usage:
 image_path = 'IMG_2434.jpg'
-tip_to_dip_cm, dip_to_pip_cm = calculate_finger_lengths(image_path)
+tip_to_dip_cm, dip_to_pip_cm, tip_to_corner_cm = calculate_finger_lengths(image_path)
 print("Length from tip to DIP joint (cm):", tip_to_dip_cm)
 print("Length from DIP to PIP joint (cm):", dip_to_pip_cm)
+print("Length from tip to corner (cm):", tip_to_corner_cm)
+
+# Calculate angle from image
+sine_ratio = tip_to_corner_cm/tip_to_dip_cm
+angle_radians = math.asin(sine_ratio)
+angle_degrees = math.degrees(angle_radians)
+print(f"The angle in radians: {angle_radians}")
+print(f"The angle in degrees: {angle_degrees}")
+
+# subtract angle from 180 
+bend_angle = 180 - angle_degrees
+print(f"The bend angle in degrees: {bend_angle}")
 
