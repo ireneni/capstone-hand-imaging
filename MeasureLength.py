@@ -110,6 +110,19 @@ def longest_continuous_segment(tuples):
     # Return the longest continuous segment
     return tuples[longest_start:longest_end + 1]
 
+def calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm):
+    # Calculate angle from image
+    sine_ratio = tip_to_corner_cm/tip_to_dip_cm
+    angle_radians = math.asin(sine_ratio)
+    angle_degrees = math.degrees(angle_radians)
+    # print(f"The angle in radians: {angle_radians}")
+    # print(f"The angle in degrees: {angle_degrees}")
+
+    # subtract angle from 180 
+    bend_angle = 180 - angle_degrees
+
+    return bend_angle
+    
 def calculate_finger_dimensions(image_path):
     # Load the image
     image = cv2.imread(image_path)
@@ -124,6 +137,10 @@ def calculate_finger_dimensions(image_path):
         dip = stickers[1]
         pip = stickers[2]
 
+        # Calculate corner for angle measurement
+        corner = [dip[0], tip[1]]
+        tip_to_corner = (tip[0] - corner[0])
+
         # Measure distances in pixels
         tip_to_dip_px = math.sqrt((dip[0] - tip[0]) ** 2 + (dip[1] - tip[1]) ** 2)
         dip_to_pip_px = math.sqrt((pip[0] - dip[0]) ** 2 + (pip[1] - dip[1]) ** 2)
@@ -131,6 +148,7 @@ def calculate_finger_dimensions(image_path):
         # Convert pixel distances to centimeters
         tip_to_dip_cm = tip_to_dip_px * scale_cm_per_pixel
         dip_to_pip_cm = dip_to_pip_px * scale_cm_per_pixel
+        tip_to_corner_cm = tip_to_corner * scale_cm_per_pixel
 
         # Calculate width at DIP and PIP joints using largest contour
         def get_width_at_joint(joint_center):
@@ -157,12 +175,14 @@ def calculate_finger_dimensions(image_path):
         
         dip_width_cm = get_width_at_joint(dip)
         pip_width_cm = get_width_at_joint(pip)
+        bend_angle_degrees = calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm)
 
         return {
             "tip_to_dip_cm": tip_to_dip_cm,
             "dip_to_pip_cm": dip_to_pip_cm,
             "dip_width_cm": dip_width_cm,
-            "pip_width_cm": pip_width_cm
+            "pip_width_cm": pip_width_cm,
+            "bend_angle_degrees": bend_angle_degrees
         }
 
     else:
@@ -174,7 +194,8 @@ image_path = 'IMG_2510.jpg'
 
 # Calculate finger dimensions:
 measurements = calculate_finger_dimensions(image_path)
-print("Length from tip to DIP joint (cm):", measurements["tip_to_dip_cm"])
-print("Length from DIP to PIP joint (cm):", measurements["dip_to_pip_cm"])
-print("Width at DIP joint (cm):", measurements["dip_width_cm"])
-print("Width at PIP joint (cm):", measurements["pip_width_cm"])
+print("Length from tip to DIP joint (cm): {:0.2f}".format(measurements["tip_to_dip_cm"]))
+print("Length from DIP to PIP joint (cm): {:0.2f}".format(measurements["dip_to_pip_cm"]))
+print("Width at DIP joint (cm): {:0.2f}".format(measurements["dip_width_cm"]))
+print("Width at PIP joint (cm): {:0.2f}".format(measurements["pip_width_cm"]))
+print("The bend angle in degrees: {:0.2f}".format(measurements["bend_angle_degrees"]))
