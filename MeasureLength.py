@@ -9,7 +9,13 @@ def extract_finger_area(image):
 
     # threshold the image, then perform a series of erosions +
     # dilations to remove any small regions of noise
-    thresh = cv2.threshold(gray, 45, 255, cv2.THRESH_BINARY)[1]
+    thresh = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)[1]
+
+    # Display the thresholded image
+    cv2.imshow("Thresholded Image", thresh)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
     thresh = cv2.erode(thresh, None, iterations=2)
     thresh = cv2.dilate(thresh, None, iterations=2)
     
@@ -190,7 +196,7 @@ def calculate_finger_dimensions(image_path):
 
 
 # Import image
-image_path = 'IMG_2510.jpg'
+image_path = 'hand_pics/IMG_8314.png'
 
 # Calculate finger dimensions:
 measurements = calculate_finger_dimensions(image_path)
