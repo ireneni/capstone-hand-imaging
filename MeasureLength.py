@@ -1,6 +1,19 @@
+import os
 import cv2
 import numpy as np
 import math
+from rembg import remove
+from PIL import Image
+
+def remove_background(image_path):
+    file_name = os.path.basename(image_path)
+    name_ext_removed = os.path.splitext(file_name)[0]
+    output_path = f'hand_pics/background_removed/{name_ext_removed}.png'
+    input = Image.open(image_path)
+    output = remove(input)
+    output.save(output_path)
+
+    return output_path
 
 def extract_finger_area(image):
     # Load and convert to grayscale
@@ -39,6 +52,42 @@ def extract_finger_area(image):
     
     return largest_contour
 
+def extract_finger_area_bg_removed(image):
+    """
+    Extract the largest contour (assumed to be the finger region) from a pre-processed PNG image 
+    with a transparent background.
+
+    Args:
+        image (np.array): Input PNG image with transparent background.
+
+    Returns:
+        largest_contour (np.array): The largest contour, representing the finger area.
+    """
+     # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Create a binary mask of non-black areas
+    mask = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)[1]
+
+    # Find contours in the binary mask
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if contours:
+        # Find the largest contour by area
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Optional: Visualize the mask of the largest contour
+        largest_contour_mask = np.zeros_like(mask)
+        cv2.drawContours(largest_contour_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
+        cv2.imshow("Finger Area Mask", largest_contour_mask)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        return largest_contour
+
+    # Return None if no contours are found
+    return None
+
 def extract_scale(hsv):
     # Define blue color range for circle detection
     lower_blue = np.array([110, 100, 100])
@@ -63,7 +112,7 @@ def extract_scale(hsv):
 
         return scale_cm_per_pixel
 
-    return False
+    return None
 
 def extract_stickers(hsv):
     # Define green color range for sticker detection
@@ -128,13 +177,58 @@ def calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm):
     bend_angle = 180 - angle_degrees
 
     return bend_angle
-    
+
+def calculate_angle_between_lines(tip, dip, pip):
+    """
+    Calculate the angle between the line segments pip-dip and dip-tip.
+
+    Args:
+        pip (tuple): Coordinates of the PIP joint (x, y).
+        dip (tuple): Coordinates of the DIP joint (x, y).
+        tip (tuple): Coordinates of the fingertip (x, y).
+
+    Returns:
+        float: Angle in degrees between the two line segments.
+    """
+    # Convert points to numpy arrays for vector calculations
+    tip = np.array(tip)
+    dip = np.array(dip)
+    pip = np.array(pip)
+
+    # Create vectors
+    vec1 = dip - pip  # Vector from pip to dip
+    vec2 = tip - dip  # Vector from dip to tip
+
+    # Calculate the dot product and magnitudes
+    dot_product = np.dot(vec1, vec2)
+    magnitude1 = np.linalg.norm(vec1)
+    magnitude2 = np.linalg.norm(vec2)
+
+    # Avoid division by zero
+    if magnitude1 == 0 or magnitude2 == 0:
+        raise ValueError("One of the line segments has zero length.")
+
+    # Calculate the angle in radians
+    cos_theta = dot_product / (magnitude1 * magnitude2)
+    angle_radians = np.arccos(np.clip(cos_theta, -1.0, 1.0))  # Clip to avoid numerical errors
+
+    # Convert to degrees
+    angle_degrees = np.degrees(angle_radians)
+
+    return angle_degrees
+
 def calculate_finger_dimensions(image_path):
     # Load the image
-    image = cv2.imread(image_path)
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    base_image = cv2.imread(image_path)
+    image_background_removed = remove_background(image_path)
+    bg_removed_image = cv2.imread(image_background_removed)
+    hsv = cv2.cvtColor(base_image, cv2.COLOR_BGR2HSV)
 
-    finger_contour = extract_finger_area(image)
+    # finger_contour = extract_finger_area(image)
+    finger_contour = extract_finger_area_bg_removed(bg_removed_image)
+    if finger_contour is None:
+        raise ValueError("No contours found.")
+    
     scale_cm_per_pixel = extract_scale(hsv) or ValueError("Could not detect both blue reference lines in the image.")
     stickers = extract_stickers(hsv) 
 
@@ -144,8 +238,8 @@ def calculate_finger_dimensions(image_path):
         pip = stickers[2]
 
         # Calculate corner for angle measurement
-        corner = [dip[0], tip[1]]
-        tip_to_corner = (tip[0] - corner[0])
+        # corner = [dip[0], tip[1]]
+        # tip_to_corner = (tip[0] - corner[0])
 
         # Measure distances in pixels
         tip_to_dip_px = math.sqrt((dip[0] - tip[0]) ** 2 + (dip[1] - tip[1]) ** 2)
@@ -154,7 +248,7 @@ def calculate_finger_dimensions(image_path):
         # Convert pixel distances to centimeters
         tip_to_dip_cm = tip_to_dip_px * scale_cm_per_pixel
         dip_to_pip_cm = dip_to_pip_px * scale_cm_per_pixel
-        tip_to_corner_cm = tip_to_corner * scale_cm_per_pixel
+        # tip_to_corner_cm = tip_to_corner * scale_cm_per_pixel
 
         # Calculate width at DIP and PIP joints using largest contour
         def get_width_at_joint(joint_center):
@@ -181,7 +275,8 @@ def calculate_finger_dimensions(image_path):
         
         dip_width_cm = get_width_at_joint(dip)
         pip_width_cm = get_width_at_joint(pip)
-        bend_angle_degrees = calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm)
+        # bend_angle_degrees = calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm)
+        bend_angle_degrees = calculate_angle_between_lines(tip, dip, pip)
 
         return {
             "tip_to_dip_cm": tip_to_dip_cm,
@@ -196,7 +291,7 @@ def calculate_finger_dimensions(image_path):
 
 
 # Import image
-image_path = 'hand_pics/IMG_8314.png'
+image_path = 'hand_pics/IMG_2510.jpg'
 
 # Calculate finger dimensions:
 measurements = calculate_finger_dimensions(image_path)
