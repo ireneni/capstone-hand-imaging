@@ -9,9 +9,15 @@ def remove_background(image_path):
     file_name = os.path.basename(image_path)
     name_ext_removed = os.path.splitext(file_name)[0]
     output_path = f'hand_pics/background_removed/{name_ext_removed}.png'
-    input = Image.open(image_path)
-    output = remove(input)
-    output.save(output_path)
+
+     # Check if the output file already exists
+    if not os.path.exists(output_path):
+        input_image = Image.open(image_path)
+        output_image = remove(input_image)
+        output_image.save(output_path)
+        print(f"Background removed and saved to {output_path}")
+    else:
+        print(f"File already exists at {output_path}. Skipping background removal.")
 
     return output_path
 
@@ -25,9 +31,9 @@ def extract_finger_area(image):
     thresh = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)[1]
 
     # Display the thresholded image
-    cv2.imshow("Thresholded Image", thresh)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow("Thresholded Image", thresh)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     thresh = cv2.erode(thresh, None, iterations=2)
     thresh = cv2.dilate(thresh, None, iterations=2)
@@ -46,9 +52,9 @@ def extract_finger_area(image):
         cv2.drawContours(mask, [largest_contour], -1, (255), thickness=cv2.FILLED)
 
     # Display the filled contour mask for verification
-    cv2.imshow("Finger Area Mask", mask)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow("Finger Area Mask", mask)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     
     return largest_contour
 
@@ -72,9 +78,14 @@ def extract_finger_area_bg_removed(image):
     # Find contours in the binary mask
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    if contours:
-        # Find the largest contour by area
-        largest_contour = max(contours, key=cv2.contourArea)
+    # Filter out contours that intersect the top of the image (assumed to be the stand)
+    valid_contours = [
+        cnt for cnt in contours if not any(point[0][1] == 0 for point in cnt)
+    ]
+
+    if valid_contours:
+        # Find the largest valid contour by area
+        largest_contour = max(valid_contours, key=cv2.contourArea)
 
         # Optional: Visualize the mask of the largest contour
         largest_contour_mask = np.zeros_like(mask)
@@ -85,20 +96,19 @@ def extract_finger_area_bg_removed(image):
 
         return largest_contour
 
-    # Return None if no contours are found
+    # Return None if no valid contours are found
     return None
 
 def extract_scale(hsv):
-    # Define blue color range for circle detection
-    lower_blue = np.array([110, 100, 100])
-    upper_blue = np.array([130, 255, 255])
-    blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+    lower_yellow = np.array([25, 150, 200])  
+    upper_yellow = np.array([35, 255, 255])  
+    yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
 
-    # Find contours of the blue circle
-    contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Find contours of the yellow circle
+    contours, _ = cv2.findContours(yellow_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if contours:
-        # Find the largest contour assuming it is the blue circle
+        # Find the largest contour assuming it is the yellow circle
         largest_contour = max(contours, key=cv2.contourArea)
         
         # Compute the enclosing circle around the largest contour
@@ -107,17 +117,17 @@ def extract_scale(hsv):
         # Calculate the pixel distance as the diameter of the circle
         pixel_distance = 2 * radius
 
-        # Calculate scale in cm per pixel (assuming the circle diameter is known to be 1.5 cm)
-        scale_cm_per_pixel = 1.9 / pixel_distance
+        # Calculate scale in mm per pixel
+        scale_mm_per_pixel = 19.05 / pixel_distance
 
-        return scale_cm_per_pixel
+        return scale_mm_per_pixel
 
     return None
 
 def extract_stickers(hsv):
     # Define green color range for sticker detection
-    lower_green = np.array([55, 100, 50])
-    upper_green = np.array([65, 255, 200])
+    lower_green = np.array([55, 90, 150])  
+    upper_green = np.array([80, 180, 255]) 
     green_mask = cv2.inRange(hsv, lower_green, upper_green)
 
     # cv2.imshow('Green Sticker Mask', green_mask)
@@ -131,12 +141,12 @@ def extract_stickers(hsv):
     for cnt in contours:
         # Compute the center of each sticker using minEnclosingCircle
         (x, y), radius = cv2.minEnclosingCircle(cnt)
-        if 15 < radius < 35:
-            green_centers.append((int(x), int(y)))
+        if 45 < radius < 75:
+            green_centers.append([int(x), int(y), radius])
 
     # Sort the centers by their y-coordinates (top to bottom)
     green_centers = sorted(green_centers, key=lambda c: c[1])
-
+    green_centers[0][1] -= green_centers[0][2] # Adjust the tip sticker to use the top edge 
     return green_centers
 
 def longest_continuous_segment(tuples):
@@ -165,9 +175,9 @@ def longest_continuous_segment(tuples):
     # Return the longest continuous segment
     return tuples[longest_start:longest_end + 1]
 
-def calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm):
+def calculate_euclidean_angle(tip_to_corner_mm, tip_to_dip_mm):
     # Calculate angle from image
-    sine_ratio = tip_to_corner_cm/tip_to_dip_cm
+    sine_ratio = tip_to_corner_mm/tip_to_dip_mm
     angle_radians = math.asin(sine_ratio)
     angle_degrees = math.degrees(angle_radians)
     # print(f"The angle in radians: {angle_radians}")
@@ -178,9 +188,10 @@ def calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm):
 
     return bend_angle
 
-def calculate_angle_between_lines(tip, dip, pip):
+def calculate_angle_with_direction(pip, dip, tip):
     """
-    Calculate the angle between the line segments pip-dip and dip-tip.
+    Calculate the angle between the line segments pip-dip and dip-tip,
+    indicating if the rotation is clockwise or counterclockwise.
 
     Args:
         pip (tuple): Coordinates of the PIP joint (x, y).
@@ -188,7 +199,7 @@ def calculate_angle_between_lines(tip, dip, pip):
         tip (tuple): Coordinates of the fingertip (x, y).
 
     Returns:
-        float: Angle in degrees between the two line segments.
+        tuple: Angle in degrees and direction ('clockwise' or 'counterclockwise').
     """
     # Convert points to numpy arrays for vector calculations
     tip = np.array(tip)
@@ -208,6 +219,9 @@ def calculate_angle_between_lines(tip, dip, pip):
     if magnitude1 == 0 or magnitude2 == 0:
         raise ValueError("One of the line segments has zero length.")
 
+    # Calculate the cross product (2D version gives a scalar)
+    cross_product = vec1[0] * vec2[1] - vec1[1] * vec2[0]
+
     # Calculate the angle in radians
     cos_theta = dot_product / (magnitude1 * magnitude2)
     angle_radians = np.arccos(np.clip(cos_theta, -1.0, 1.0))  # Clip to avoid numerical errors
@@ -215,7 +229,10 @@ def calculate_angle_between_lines(tip, dip, pip):
     # Convert to degrees
     angle_degrees = np.degrees(angle_radians)
 
-    return angle_degrees
+    # Determine the rotation direction
+    direction = "counterclockwise" if cross_product > 0 else "clockwise"
+
+    return angle_degrees, direction
 
 def calculate_finger_dimensions(image_path):
     # Load the image
@@ -229,7 +246,7 @@ def calculate_finger_dimensions(image_path):
     if finger_contour is None:
         raise ValueError("No contours found.")
     
-    scale_cm_per_pixel = extract_scale(hsv) or ValueError("Could not detect both blue reference lines in the image.")
+    scale_mm_per_pixel = extract_scale(hsv) or ValueError("Could not detect scale in the image.")
     stickers = extract_stickers(hsv) 
 
     if len(stickers) == 3:
@@ -246,18 +263,18 @@ def calculate_finger_dimensions(image_path):
         dip_to_pip_px = math.sqrt((pip[0] - dip[0]) ** 2 + (pip[1] - dip[1]) ** 2)
 
         # Convert pixel distances to centimeters
-        tip_to_dip_cm = tip_to_dip_px * scale_cm_per_pixel
-        dip_to_pip_cm = dip_to_pip_px * scale_cm_per_pixel
-        # tip_to_corner_cm = tip_to_corner * scale_cm_per_pixel
+        tip_to_dip_mm = tip_to_dip_px * scale_mm_per_pixel
+        dip_to_pip_mm = dip_to_pip_px * scale_mm_per_pixel
+        # tip_to_corner_mm = tip_to_corner * scale_mm_per_pixel
 
         # Calculate width at DIP and PIP joints using largest contour
         def get_width_at_joint(joint_center):
-            # Define a 2cm horizontal line at the y-coordinate of the joint center
+            # Define a 30mm horizontal line extending left and right of the joint center
             x_i = joint_center[0]
             y = joint_center[1]
             intersecting_points = []
-            left_bound = int(x_i - 1/scale_cm_per_pixel)
-            right_bound = int(x_i + 1/scale_cm_per_pixel)
+            left_bound = int(x_i - 15/scale_mm_per_pixel)
+            right_bound = int(x_i + 15/scale_mm_per_pixel)
 
             # Find points along the line that intersect with the contour
             for x in range(left_bound, right_bound):
@@ -270,20 +287,21 @@ def calculate_finger_dimensions(image_path):
                 right_point = trimmed[-1]
                 width_px = math.sqrt((right_point[0] - left_point[0]) ** 2)
 
-                return width_px * scale_cm_per_pixel
+                return width_px * scale_mm_per_pixel
             return None
         
-        dip_width_cm = get_width_at_joint(dip)
-        pip_width_cm = get_width_at_joint(pip)
-        # bend_angle_degrees = calculate_euclidean_angle(tip_to_corner_cm, tip_to_dip_cm)
-        bend_angle_degrees = calculate_angle_between_lines(tip, dip, pip)
+        dip_width_mm = get_width_at_joint(dip)
+        pip_width_mm = get_width_at_joint(pip)
+        # bend_angle_degrees = calculate_euclidean_angle(tip_to_corner_mm, tip_to_dip_mm)
+        bend_angle_degrees, bend_angle_direction = calculate_angle_with_direction(tip, dip, pip)
 
         return {
-            "tip_to_dip_cm": tip_to_dip_cm,
-            "dip_to_pip_cm": dip_to_pip_cm,
-            "dip_width_cm": dip_width_cm,
-            "pip_width_cm": pip_width_cm,
-            "bend_angle_degrees": bend_angle_degrees
+            "tip_to_dip_mm": tip_to_dip_mm,
+            "dip_to_pip_mm": dip_to_pip_mm,
+            "dip_width_mm": dip_width_mm,
+            "pip_width_mm": pip_width_mm,
+            "bend_angle_degrees": bend_angle_degrees,
+            "bend_angle_direction": bend_angle_direction
         }
 
     else:
@@ -291,12 +309,12 @@ def calculate_finger_dimensions(image_path):
 
 
 # Import image
-image_path = 'hand_pics/IMG_2510.jpg'
+image_path = 'hand_pics/IMG_2603.png'
 
 # Calculate finger dimensions:
 measurements = calculate_finger_dimensions(image_path)
-print("Length from tip to DIP joint (cm): {:0.2f}".format(measurements["tip_to_dip_cm"]))
-print("Length from DIP to PIP joint (cm): {:0.2f}".format(measurements["dip_to_pip_cm"]))
-print("Width at DIP joint (cm): {:0.2f}".format(measurements["dip_width_cm"]))
-print("Width at PIP joint (cm): {:0.2f}".format(measurements["pip_width_cm"]))
-print("The bend angle in degrees: {:0.2f}".format(measurements["bend_angle_degrees"]))
+print("Length from tip to DIP joint (mm): {:0.2f}".format(measurements["tip_to_dip_mm"]))
+print("Length from DIP to PIP joint (mm): {:0.2f}".format(measurements["dip_to_pip_mm"]))
+print("Width at DIP joint (mm): {:0.2f}".format(measurements["dip_width_mm"]))
+print("Width at PIP joint (mm): {:0.2f}".format(measurements["pip_width_mm"]))
+print("The bend angle in degrees: {:0.2f} {}".format(measurements["bend_angle_degrees"], measurements["bend_angle_direction"]))
