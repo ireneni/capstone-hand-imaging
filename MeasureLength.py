@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import math
+import json
 from rembg import remove
 from PIL import Image
 
@@ -318,3 +319,19 @@ print("Length from DIP to PIP joint (mm): {:0.2f}".format(measurements["dip_to_p
 print("Width at DIP joint (mm): {:0.2f}".format(measurements["dip_width_mm"]))
 print("Width at PIP joint (mm): {:0.2f}".format(measurements["pip_width_mm"]))
 print("The bend angle in degrees: {:0.2f} {}".format(measurements["bend_angle_degrees"], measurements["bend_angle_direction"]))
+
+directory_path = "C:\\Users\\Amanda\\Documents\\Capstone_code\\capstone-hand-imaging\\hand_measurements\\JSON"
+
+# Create the directory if it doesn't exist
+if not os.path.exists(directory_path):
+    os.makedirs(directory_path)
+
+# Extract the base name of the image file (without extension)
+image_base_name = os.path.splitext(os.path.basename(image_path))[0]
+
+# Construct the JSON file name
+file_name = f"final_measurements_{image_base_name}.json"
+file_path = os.path.join(directory_path, file_name)
+
+with open(file_path, "w") as f:
+    json.dump(measurements, f)
