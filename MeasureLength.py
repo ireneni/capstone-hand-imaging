@@ -329,7 +329,7 @@ print("Length from DIP to PIP joint (mm): {:0.2f}".format(major_measurements["di
 print("---------------------------------------------------")
 print("Length of 1/2 tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"] / 2))
 print("Length of 1/2 DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"] / 2))
-print("----------------Width measurements----------------")
+print("----------------Width measurements-----------------")
 print("Width at 1/2 DIP to tip for distal major axis (mm): ", scale_down_five_percent(major_measurements["dip_tip_major_axis"]))
 print("Width at DIP major axis (mm): ", scale_down_five_percent(major_measurements["dip_width_major_axis"]))
 print("Width at 1/2 PIP to DIP for proximal major axis (mm): ", scale_down_five_percent(major_measurements["pip_dip_major_axis"]))
