@@ -324,7 +324,7 @@ major_measurements = calculate_major_axis_finger_dimensions(major_image_path)
 minor_measurements = calculate_minor_axis_finger_dimensions(minor_image_path, major_measurements)
 
 print("----------------Length measurements----------------")
-print("Length from tip to DIP joint (mm): ".format(major_measurements["tip_dip_mm"]))
+print("Length from tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"]))
 print("Length from DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"]))
 print("---------------------------------------------------")
 print("Length of 1/2 tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"] / 2))
