@@ -5,6 +5,9 @@ import math
 from rembg import remove
 from PIL import Image
 
+# Define constants
+STICKER_WIDTH_MM = 6.35
+
 def remove_background(image_path):
     file_name = os.path.basename(image_path)
     name_ext_removed = os.path.splitext(file_name)[0]
@@ -81,12 +84,14 @@ def extract_stickers(hsv):
         if len(cnt) >= 5:
             ellipse = cv2.fitEllipse(cnt)
             (x, y), (major_axis, minor_axis), angle = ellipse
-            if 45 < max(major_axis, minor_axis) / 2 < 75:
+            if 45 < max(major_axis, minor_axis) / 2 < 135:
                 green_stickers.append({
                     "center": (int(x), int(y)),
                     "axes": (major_axis / 2, minor_axis / 2),
                     "angle": angle
                 })
+            else:
+                print("Contour outside of sticker size range.")
 
     green_stickers = sorted(green_stickers, key=lambda c: c["center"][1])
     return green_stickers
@@ -119,32 +124,20 @@ def get_orthogonal_vector(vector):
     # Rotate vector by 90 degrees counter-clockwise
     return np.array([-vector[1], vector[0]])
 
-def extract_scale_from_stickers(tip, dip, pip, tip_to_dip_vector, dip_to_pip_vector):
-    scales = []
+def extract_scale_from_stickers(sticker, vector):
+    # Calculate pixel distance along ellipse length
+    length_pixel_distance = ellipse_pixel_length(sticker["axes"], sticker["angle"], vector)
 
-    # Calculate pixel distances along the ellipses (Length scale)
-    tip_length_pixel_distance = ellipse_pixel_length(tip["axes"], tip["angle"], tip_to_dip_vector)
-    dip_length_pixel_distance = ellipse_pixel_length(dip["axes"], dip["angle"], dip_to_pip_vector)
-    pip_length_pixel_distance = ellipse_pixel_length(pip["axes"], pip["angle"], dip_to_pip_vector)
+    # Calculate pixel distance along ellipse width
+    orthogonal = get_orthogonal_vector(vector)
+    width_pixel_distance = ellipse_pixel_length(sticker["axes"], sticker["angle"], orthogonal)
 
-    # Calculate pixel distances along the orthogonal vectors (Width scale)
-    dip_to_pip_orthogonal = get_orthogonal_vector(dip_to_pip_vector)
-    dip_width_pixel_distance = ellipse_pixel_length(dip["axes"], dip["angle"], get_orthogonal_vector(dip_to_pip_orthogonal))
-    pip_width_pixel_distance = ellipse_pixel_length(pip["axes"], pip["angle"], get_orthogonal_vector(dip_to_pip_orthogonal))
-
-    # Calculate scales (mm/pixel)
-    scales.append(6.35 / tip_length_pixel_distance)
-    scales.append(6.35 / dip_length_pixel_distance)
-    scales.append(6.35 / pip_length_pixel_distance)
-
-    scales.append(6.35 / dip_width_pixel_distance)
-    scales.append(6.35 / pip_width_pixel_distance)
-
-    return scales
+    # Calculate scale (mm/pixel)
+    return {"length": STICKER_WIDTH_MM / length_pixel_distance, "width": STICKER_WIDTH_MM / width_pixel_distance}
 
 def longest_continuous_segment(points, max_gap=2):
     """
-    Finds the longest continuous segment in a list of points, 
+    Finds the longest continuous segment in a list of points,
     allowing for any slope rather than just horizontal continuity.
 
     Args:
@@ -181,57 +174,45 @@ def longest_continuous_segment(points, max_gap=2):
 
     return points[longest_start:longest_end + 1]
 
-def calculate_angle_with_direction(pip, dip, tip):
-    """
-    Calculate the angle between the line segments pip-dip and dip-tip,
-    indicating if the rotation is clockwise or counterclockwise.
+def get_finger_width(joint_center, scale, perp_vector, finger_contour):
+    x_i, y_i = joint_center
+    intersecting_points = []
 
-    Args:
-        pip (tuple): Coordinates of the PIP joint (x, y).
-        dip (tuple): Coordinates of the DIP joint (x, y).
-        tip (tuple): Coordinates of the fingertip (x, y).
+    search_distance = 15 / scale  # Convert mm to pixels
+    num_samples = int(search_distance * 2)  # Adjust resolution
+    for i in range(-num_samples // 2, num_samples // 2 + 1):
+        x = int(x_i + i * perp_vector[0])
+        y = int(y_i + i * perp_vector[1])
 
-    Returns:
-        tuple: Angle in degrees and direction ('clockwise' or 'counterclockwise').
-    """
-    # Convert points to numpy arrays for vector calculations
-    tip = np.array(tip)
-    dip = np.array(dip)
-    pip = np.array(pip)
+        if cv2.pointPolygonTest(finger_contour, (x, y), False) >= 0:
+            intersecting_points.append((x, y))
 
-    # Create vectors
-    vec1 = dip - pip  # Vector from pip to dip
-    vec2 = tip - dip  # Vector from dip to tip
+    if len(intersecting_points) >= 2:
+        # Extract longest continuous segment to remove noise
+        trimmed = longest_continuous_segment(intersecting_points)
+        if len(trimmed) >= 2:
+            left_point = trimmed[0]
+            right_point = trimmed[-1]
+            width_px = math.sqrt((right_point[0] - left_point[0]) ** 2 + (right_point[1] - left_point[1]) ** 2)
 
-    # Calculate the dot product and magnitudes
-    dot_product = np.dot(vec1, vec2)
-    magnitude1 = np.linalg.norm(vec1)
-    magnitude2 = np.linalg.norm(vec2)
+            return width_px * scale
 
-    # Avoid division by zero
-    if magnitude1 == 0 or magnitude2 == 0:
-        raise ValueError("One of the line segments has zero length.")
+    return None
 
-    # Calculate the cross product (2D version gives a scalar)
-    cross_product = vec1[0] * vec2[1] - vec1[1] * vec2[0]
+def euclidean_distance(point1, point2):
+    return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-    # Calculate the angle in radians
-    cos_theta = dot_product / (magnitude1 * magnitude2)
-    angle_radians = np.arccos(np.clip(cos_theta, -1.0, 1.0))  # Clip to avoid numerical errors
+def midpoint(point1, point2):
+    return ((point1[0] + point2[0]) / 2, (point1[1] + point2[1]) / 2)
 
-    # Convert to degrees
-    angle_degrees = np.degrees(angle_radians)
+def average(x, y):
+    return (x + y) / 2
 
-    # Determine the rotation direction
-    direction = "counterclockwise" if cross_product > 0 else "clockwise"
-
-    return angle_degrees, direction
-
-def calculate_finger_dimensions(image_path):
+def extract_measurement_features(image_path):
     # Load the image
     base_image = cv2.imread(image_path)
-    image_background_removed = remove_background(image_path)
-    bg_removed_image = cv2.imread(image_background_removed)
+    rembg_image = remove_background(image_path)
+    bg_removed_image = cv2.imread(rembg_image)
     hsv = cv2.cvtColor(base_image, cv2.COLOR_BGR2HSV)
 
     finger_contour = extract_finger_area(bg_removed_image)
@@ -239,6 +220,11 @@ def calculate_finger_dimensions(image_path):
         raise ValueError("No contours found.")
 
     stickers = extract_stickers(hsv)
+    return finger_contour, stickers
+
+def calculate_major_axis_finger_dimensions(image_path):
+    finger_contour, stickers = extract_measurement_features(image_path)
+
     if len(stickers) == 3:
         tip = stickers[0]
         dip = stickers[1]
@@ -247,73 +233,107 @@ def calculate_finger_dimensions(image_path):
         tip_center, dip_center, pip_center = np.array(tip["center"]), np.array(dip["center"]), np.array(pip["center"])
 
         # Vectors for scale calculations
-        tip_to_dip_vector = dip_center - tip_center
-        dip_to_pip_vector = pip_center - dip_center
+        tip_dip_vector = dip_center - tip_center
+        dip_pip_vector = pip_center - dip_center
 
-        scale_tip_length, scale_dip_length, scale_pip_length, scale_dip_width, scale_pip_width = extract_scale_from_stickers(tip, dip, pip, tip_to_dip_vector, dip_to_pip_vector)
+        # Extract scales
+        scale_tip = extract_scale_from_stickers(tip, tip_dip_vector)
+        scale_dip = extract_scale_from_stickers(dip, dip_pip_vector)
+        scale_pip = extract_scale_from_stickers(pip, dip_pip_vector)
 
         # Measure distances in pixels
-        dip_to_tip_px = math.sqrt((dip_center[0] - tip_center[0]) ** 2 + (dip_center[1] - tip_center[1]) ** 2)
-        pip_to_dip_px = math.sqrt((pip_center[0] - dip_center[0]) ** 2 + (pip_center[1] - dip_center[1]) ** 2)
+        dip_tip_px = euclidean_distance(dip_center, tip_center)
+        pip_dip_px = euclidean_distance(pip_center, dip_center)
 
         # Convert pixel distances to centimeters
-        # Add 2 for tip-to-dip to measure from top edge of tip sticker
-        dip_to_tip_mm = dip_to_tip_px * ((scale_tip_length + scale_dip_length) / 2) + 2
-        pip_to_dip_mm = pip_to_dip_px * ((scale_dip_length + scale_pip_length) / 2)
+        # Add 2 mm for tip-to-dip to measure from top edge of tip sticker
+        dip_tip_mm = dip_tip_px * ((scale_tip["length"]+ scale_dip["length"]) / 2) + 2
+        pip_dip_mm = pip_dip_px * ((scale_dip["length"] + scale_pip["length"]) / 2)
 
-        pip_to_dip_unit = dip_to_pip_vector / np.linalg.norm(dip_to_pip_vector)
-        perp_vector = np.array([pip_to_dip_unit[1], -pip_to_dip_unit[0]])
+        # Find perpendicular width vectors
+        dip_tip_unit = tip_dip_vector / np.linalg.norm(tip_dip_vector)
+        pip_dip_unit = dip_pip_vector / np.linalg.norm(dip_pip_vector)
+        dip_tip_perp_vector = np.array([dip_tip_unit[1], -dip_tip_unit[0]])
+        pip_dip_perp_vector = np.array([pip_dip_unit[1], -pip_dip_unit[0]])
 
-        # Calculate width at DIP and PIP joints using largest contour
-        def get_width_at_joint(joint_center, scale, perp_vector):
-            x_i, y_i = joint_center
-            intersecting_points = []
+        # Find midpoints of length vectors
+        mid_dip_tip = midpoint(dip["center"], tip["center"])
+        mid_pip_dip = midpoint(pip["center"], dip["center"])
 
-            search_distance = 15 / scale  # Convert mm to pixels
-            num_samples = int(search_distance * 2)  # Adjust resolution
-            for i in range(-num_samples // 2, num_samples // 2 + 1):
-                x = int(x_i + i * perp_vector[0])
-                y = int(y_i + i * perp_vector[1])
-
-                if cv2.pointPolygonTest(finger_contour, (x, y), False) >= 0:
-                    intersecting_points.append((x, y))
-
-            if len(intersecting_points) >= 2:
-                # Extract longest continuous segment to remove noise
-                trimmed = longest_continuous_segment(intersecting_points)
-                if len(trimmed) >= 2:
-                    left_point = trimmed[0]
-                    right_point = trimmed[-1]
-                    width_px = math.sqrt((right_point[0] - left_point[0]) ** 2 + (right_point[1] - left_point[1]) ** 2)
-
-                    return width_px * scale
-
-            return None
-
-        dip_width_mm = get_width_at_joint(dip["center"], scale_dip_width, perp_vector)
-        pip_width_mm = get_width_at_joint(pip["center"], scale_pip_width, perp_vector)
-        bend_angle_degrees, bend_angle_direction = calculate_angle_with_direction(tip["center"], dip["center"], pip["center"])
+        # Calculate width at joint
+        dip_width_major_axis = get_finger_width(dip["center"], scale_dip["width"], pip_dip_perp_vector, finger_contour)
+        # Calculate width at midpoints
+        dip_tip_major_axis = get_finger_width(mid_dip_tip, average(scale_tip["width"], scale_dip["width"]), dip_tip_perp_vector, finger_contour)
+        pip_dip_major_axis = get_finger_width(mid_pip_dip, average(scale_dip["width"], scale_pip["width"]), pip_dip_perp_vector, finger_contour)
 
         return {
-            "tip_to_dip_mm": dip_to_tip_mm,
-            "dip_to_pip_mm": pip_to_dip_mm,
-            "dip_width_mm": dip_width_mm,
-            "pip_width_mm": pip_width_mm,
-            "bend_angle_degrees": bend_angle_degrees,
-            "bend_angle_direction": bend_angle_direction
+            "tip_dip_mm": dip_tip_mm,
+            "dip_pip_mm": pip_dip_mm,
+            "dip_tip_major_axis": dip_tip_major_axis,
+            "dip_width_major_axis": dip_width_major_axis,
+            "pip_dip_major_axis": pip_dip_major_axis,
+            "dist_dip_tip_midpoint_mm": dip_tip_mm / 2,
+            "dist_pip_dip_midpoint_mm": pip_dip_mm / 2,
         }
 
     else:
         raise ValueError("Could not detect exactly three stickers in the image.")
 
+def calculate_minor_axis_finger_dimensions(image_path, major_measurements):
+    finger_contour, stickers = extract_measurement_features(image_path)
+
+    if len(stickers) == 1:
+        dip = stickers[0]
+        x_dip, y_dip = dip["center"]
+
+        # Define unit basis vectors for sticker orientation
+        y_vector = np.array([0, 1])
+        x_vector = get_orthogonal_vector(y_vector)
+        scale_dip = extract_scale_from_stickers(dip, y_vector)
+
+        # Calculate midpoints using y-offset from major axis measurements,
+        # converted from mm to pixel units using the DIP scale factor.
+        mid_dip_tip = np.array([x_dip, (y_dip - (major_measurements["dist_dip_tip_midpoint_mm"] / scale_dip["length"]))])
+        mid_pip_dip = np.array([x_dip, (y_dip + (major_measurements["dist_pip_dip_midpoint_mm"] / scale_dip["length"]))])
+
+        # Calculate width at joint
+        dip_width_minor_axis = get_finger_width(dip["center"], scale_dip["width"], x_vector, finger_contour)
+        # Calculate width at midpoints
+        dip_tip_minor_axis = get_finger_width(mid_dip_tip, scale_dip["width"], x_vector, finger_contour)
+        pip_dip_minor_axis = get_finger_width(mid_pip_dip, scale_dip["width"], x_vector, finger_contour)
+
+        return {
+            "dip_tip_minor_axis": dip_tip_minor_axis,
+            "dip_width_minor_axis": dip_width_minor_axis,
+            "pip_dip_minor_axis": pip_dip_minor_axis,
+        }
+
+    else:
+        raise ValueError("Could not detect exactly one sticker in the image.")
 
 # Import image
-image_path = 'hand_pics/IMG_2603.png'
+major_image_path = 'hand_pics/IMG_8325.png'
+minor_image_path = 'hand_pics/IMG_3154.png'
+
+# Scale width measurements to account for warp due to curvature
+def scale_down_five_percent(measurement):
+    return ("{:0.2f}".format(measurement*0.95))
 
 # Calculate finger dimensions:
-measurements = calculate_finger_dimensions(image_path)
-print("Length from tip to DIP joint (mm): {:0.2f}".format(measurements["tip_to_dip_mm"]))
-print("Length from DIP to PIP joint (mm): {:0.2f}".format(measurements["dip_to_pip_mm"]))
-print("Width at DIP joint (mm): {:0.2f}".format(measurements["dip_width_mm"]))
-print("Width at PIP joint (mm): {:0.2f}".format(measurements["pip_width_mm"]))
-print("The bend angle in degrees: {:0.2f} {}".format(measurements["bend_angle_degrees"], measurements["bend_angle_direction"]))
+major_measurements = calculate_major_axis_finger_dimensions(major_image_path)
+minor_measurements = calculate_minor_axis_finger_dimensions(minor_image_path, major_measurements)
+
+print("----------------Length measurements----------------")
+print("Length from tip to DIP joint (mm): ".format(major_measurements["tip_dip_mm"]))
+print("Length from DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"]))
+print("---------------------------------------------------")
+print("Length of 1/2 tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"] / 2))
+print("Length of 1/2 DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"] / 2))
+print("----------------Width measurements----------------")
+print("Width at 1/2 DIP to tip for distal major axis (mm): ", scale_down_five_percent(major_measurements["dip_tip_major_axis"]))
+print("Width at DIP major axis (mm): ", scale_down_five_percent(major_measurements["dip_width_major_axis"]))
+print("Width at 1/2 PIP to DIP for proximal major axis (mm): ", scale_down_five_percent(major_measurements["pip_dip_major_axis"]))
+print("---------------------------------------------------")
+print("Width at 1/2 DIP to tip for distal minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_tip_minor_axis"]))
+print("Width at DIP minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_width_minor_axis"]))
+print("Width at 1/2 PIP to DIP for proximal minor axis (mm): ", scale_down_five_percent(minor_measurements["pip_dip_minor_axis"]))
