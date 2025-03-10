@@ -299,7 +299,7 @@ def calculate_major_axis_finger_dimensions(image_path):
 
         # Convert pixel distances to centimeters
         # Add 2 mm for tip-to-dip to measure from top edge of tip sticker
-        dip_tip_mm = dip_tip_px * ((scale_tip["length"]+ scale_dip["length"]) / 2) + 2
+        dip_tip_mm = dip_tip_px * ((scale_tip["length"]+ scale_dip["length"]) / 2) + (STICKER_WIDTH_MM / 2)
         pip_dip_mm = pip_dip_px * ((scale_dip["length"] + scale_pip["length"]) / 2)
 
         # Find perpendicular width vectors
