@@ -79,12 +79,18 @@ def extract_stickers(hsv):
     # Find contours for green stickers
     contours, _ = cv2.findContours(green_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     green_stickers = []
-    
+
+    def sticker_within_range(major_axis, minor_axis):
+        if 45 < major_axis / 2 < 135:
+            if 35 < minor_axis / 2 < 135:
+                return True
+        return False
+
     for cnt in contours:
         if len(cnt) >= 5:
             ellipse = cv2.fitEllipse(cnt)
             (x, y), (major_axis, minor_axis), angle = ellipse
-            if 45 < max(major_axis, minor_axis) / 2 < 135:
+            if sticker_within_range(major_axis, minor_axis):
                 green_stickers.append({
                     "center": (int(x), int(y)),
                     "axes": (major_axis / 2, minor_axis / 2),
@@ -134,6 +140,52 @@ def extract_scale_from_stickers(sticker, vector):
 
     # Calculate scale (mm/pixel)
     return {"length": STICKER_WIDTH_MM / length_pixel_distance, "width": STICKER_WIDTH_MM / width_pixel_distance}
+
+def calculate_angle_with_direction(pip, dip, tip):
+    """
+    Calculate the angle between the line segments pip-dip and dip-tip,
+    indicating if the rotation is clockwise or counterclockwise.
+
+    Args:
+        pip (tuple): Coordinates of the PIP joint (x, y).
+        dip (tuple): Coordinates of the DIP joint (x, y).
+        tip (tuple): Coordinates of the fingertip (x, y).
+
+    Returns:
+        tuple: Angle in degrees and direction ('clockwise' or 'counterclockwise').
+    """
+    # Convert points to numpy arrays for vector calculations
+    tip = np.array(tip)
+    dip = np.array(dip)
+    pip = np.array(pip)
+
+    # Create vectors
+    vec1 = dip - pip  # Vector from pip to dip
+    vec2 = tip - dip  # Vector from dip to tip
+
+    # Calculate the dot product and magnitudes
+    dot_product = np.dot(vec1, vec2)
+    magnitude1 = np.linalg.norm(vec1)
+    magnitude2 = np.linalg.norm(vec2)
+
+    # Avoid division by zero
+    if magnitude1 == 0 or magnitude2 == 0:
+        raise ValueError("One of the line segments has zero length.")
+
+    # Calculate the cross product (2D version gives a scalar)
+    cross_product = vec1[0] * vec2[1] - vec1[1] * vec2[0]
+
+    # Calculate the angle in radians
+    cos_theta = dot_product / (magnitude1 * magnitude2)
+    angle_radians = np.arccos(np.clip(cos_theta, -1.0, 1.0))  # Clip to avoid numerical errors
+
+    # Convert to degrees
+    angle_degrees = np.degrees(angle_radians)
+
+    # Determine the rotation direction
+    direction = "counterclockwise" if cross_product > 0 else "clockwise"
+
+    return angle_degrees, direction
 
 def longest_continuous_segment(points, max_gap=2):
     """
@@ -266,6 +318,12 @@ def calculate_major_axis_finger_dimensions(image_path):
         dip_tip_major_axis = get_finger_width(mid_dip_tip, average(scale_tip["width"], scale_dip["width"]), dip_tip_perp_vector, finger_contour)
         pip_dip_major_axis = get_finger_width(mid_pip_dip, average(scale_dip["width"], scale_pip["width"]), pip_dip_perp_vector, finger_contour)
 
+        # Angle measure used for model development
+        bend_angle_degrees, bend_angle_direction = calculate_angle_with_direction(tip["center"], dip["center"], pip["center"])
+        # tip to DIP x-offset for parameterized model
+        x_offset = (tip["center"][0] - dip["center"][0]) * average(scale_tip["width"], scale_dip["width"])
+
+
         return {
             "tip_dip_mm": dip_tip_mm,
             "dip_pip_mm": pip_dip_mm,
@@ -274,6 +332,9 @@ def calculate_major_axis_finger_dimensions(image_path):
             "pip_dip_major_axis": pip_dip_major_axis,
             "dist_dip_tip_midpoint_mm": dip_tip_mm / 2,
             "dist_pip_dip_midpoint_mm": pip_dip_mm / 2,
+            "bend_angle_degrees": bend_angle_degrees,
+            "bend_angle_direction": bend_angle_direction,
+            "x_offset": x_offset
         }
 
     else:
@@ -312,8 +373,8 @@ def calculate_minor_axis_finger_dimensions(image_path, major_measurements):
         raise ValueError("Could not detect exactly one sticker in the image.")
 
 # Import image
-major_image_path = 'hand_pics/IMG_8325.png'
-minor_image_path = 'hand_pics/IMG_3154.png'
+major_image_path = 'hand_pics/' + 'index.jpg'
+minor_image_path = 'hand_pics/' + 'index_side.jpg'
 
 # Scale width measurements to account for warp due to curvature
 def scale_down_five_percent(measurement):
@@ -337,3 +398,6 @@ print("---------------------------------------------------")
 print("Width at 1/2 DIP to tip for distal minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_tip_minor_axis"]))
 print("Width at DIP minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_width_minor_axis"]))
 print("Width at 1/2 PIP to DIP for proximal minor axis (mm): ", scale_down_five_percent(minor_measurements["pip_dip_minor_axis"]))
+print("------------------------Angle----------------------")
+print("The bend angle in degrees: {:0.2f} {}".format(major_measurements["bend_angle_degrees"], major_measurements["bend_angle_direction"]))
+print("The tip to DIP x-offset (mm, positive x to the right): {:0.2f}".format(major_measurements["x_offset"]))
