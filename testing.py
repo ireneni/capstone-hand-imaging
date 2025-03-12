@@ -13,9 +13,25 @@ import numpy as np
 
 # Convert rgb to hsv
 # GREEN
-# rgb_color = np.uint8([[[145, 249, 159]]]) 
-# hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
-# print("HSV Value for OpenCV:", hsv_color[0][0])
+rgb_color = np.uint8([[[74,184,103]]])
+hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+print("HSV Value for OpenCV:", hsv_color[0][0])
+
+rgb_color = np.uint8([[[71,180,101]]])
+hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+print("HSV Value for OpenCV:", hsv_color[0][0])
+
+rgb_color = np.uint8([[[110,217,139]]])
+hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+print("HSV Value for OpenCV:", hsv_color[0][0])
+
+rgb_color = np.uint8([[[101,211,125]]])
+hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+print("HSV Value for OpenCV:", hsv_color[0][0])
+
+rgb_color = np.uint8([[[59,169,83]]])
+hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+print("HSV Value for OpenCV:", hsv_color[0][0])
 
 # rgb_color = np.uint8([[[137, 238, 141]]])  
 # hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
@@ -46,18 +62,18 @@ import numpy as np
 # print("HSV Value for OpenCV:", hsv_color[0][0])
 
 # YELLOW
-rgb_color = np.uint8([[[250, 255, 39]]])  
-hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
-print("HSV Value for OpenCV:", hsv_color[0][0])
+# rgb_color = np.uint8([[[250, 255, 39]]])
+# hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+# print("HSV Value for OpenCV:", hsv_color[0][0])
 
-rgb_color = np.uint8([[[250, 249, 32]]])  
-hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
-print("HSV Value for OpenCV:", hsv_color[0][0])
+# rgb_color = np.uint8([[[250, 249, 32]]])
+# hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+# print("HSV Value for OpenCV:", hsv_color[0][0])
 
-rgb_color = np.uint8([[[252, 255, 35]]])  
-hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
-print("HSV Value for OpenCV:", hsv_color[0][0])
+# rgb_color = np.uint8([[[252, 255, 35]]])
+# hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+# print("HSV Value for OpenCV:", hsv_color[0][0])
 
-rgb_color = np.uint8([[[250, 254, 76]]])  
-hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
-print("HSV Value for OpenCV:", hsv_color[0][0])
+# rgb_color = np.uint8([[[250, 254, 76]]])
+# hsv_color = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)
+# print("HSV Value for OpenCV:", hsv_color[0][0])
