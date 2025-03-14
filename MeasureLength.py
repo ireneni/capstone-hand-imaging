@@ -402,3 +402,29 @@ print("Width at 1/2 PIP to DIP for proximal minor axis (mm): ", scale_down_five_
 print("------------------------Angle----------------------")
 print("The bend angle in degrees: {:0.2f} {}".format(major_measurements["bend_angle_degrees"], major_measurements["bend_angle_direction"]))
 print("The tip to DIP x-offset (mm, positive x to the right): {:0.2f}".format(major_measurements["x_offset"]))
+
+
+# Save measures into json 
+
+measurement_data = {
+    "major_measurements": major_measurements,
+    "minor_measurements": minor_measurements
+}
+
+directory_path = "C:\\Users\\Amanda\\Documents\\Capstone_code\\capstone-hand-imaging\\hand_measurements\\JSON"
+# Create the directory if it doesn't exist
+if not os.path.exists(directory_path):
+    os.makedirs(directory_path)
+
+# Extract the base name of the image file (without extension)
+image_base_name = os.path.splitext(os.path.basename(major_image_path))[0]
+
+# Construct the JSON file name
+file_name = f"final_measurements_{image_base_name}.json"
+file_path = os.path.join(directory_path, file_name)
+
+print("Saving measurements to: ", file_path)
+
+with open(file_path, "w") as f:
+    json.dump(measurement_data, f)
+    print("File saved")

@@ -25,6 +25,8 @@ def load_measurements():
 
 # Load the final measurements
 final_measurements, filename = load_measurements()
+minor_measurements = final_measurements["minor_measurements"]
+major_measurements = final_measurements["major_measurements"]
 
 # Calculations for parameters of distal and proximal rings 
 def distal_minor_axis(distal_depth) -> float:
@@ -45,12 +47,6 @@ def proximal_major_axis(proximal_width) -> float:
 def dip_major_axis(dip_width) -> float:
     return (dip_width / 2) - 0.4
 
-# Calculations of offset planes
-def plane_offsets(dip_to_tip, pip_to_dip):
-    distal_offset = dip_to_tip / 2
-    proximal_offset = pip_to_dip / 2
-    return distal_offset, proximal_offset
-
 # Write the results into a CSV file
 def write_to_csv(filename, output_dir):
 
@@ -58,25 +54,18 @@ def write_to_csv(filename, output_dir):
 
     csv_filename = os.path.splitext(filename)[0] + ".csv"
     output_path = os.path.join(output_dir, csv_filename)
-    # distal_minor = distal_minor_axis(final_measurements["distal_depth"]) # need to chnage key measure doesn't exist
-    # proximal_minor = proximal_minor_axis(final_measurements["proximal_depth"]) # need to chnage key measure doesn't exist
-    # dip_minor = dip_minor_axis(final_measurements["dip_depth"]) # need to chnage key measure doesn't exist
-    # distal_major = distal_major_axis(final_measurements["distal_width"]) # need to chnage key measure doesn't exist 
-    # proximal_major = proximal_major_axis(final_measurements["proximal_width"]) # need to change key measure doesn't exist
-    dip_major = dip_major_axis(final_measurements["dip_width_mm"])
-    
-    distal_offset, proximal_offset = plane_offsets(final_measurements["tip_to_dip_mm"], final_measurements["dip_to_pip_mm"])
     
     # Prepare the data for the CSV
     data = [
-        ("Distal Minor Axis", distal_minor_axis),
-        ("Proximal Minor Axis", proximal_minor_axis),
-        ("DIP Minor Axis", dip_minor_axis),
-        ("Distal Major Axis", distal_major_axis),
-        ("Proximal Major Axis", proximal_major_axis),
-        ("DIP Major Axis", dip_major),
-        ("Distal Plane Offset", distal_offset),
-        ("Proximal Plane Offset", proximal_offset),
+        ("Distal Minor Axis", distal_minor_axis(minor_measurements["dip_tip_minor_axis"])),
+        ("Proximal Minor Axis", proximal_minor_axis(minor_measurements["pip_dip_minor_axis"])),
+        ("DIP Minor Axis", dip_minor_axis(minor_measurements["dip_width_minor_axis"])),
+        ("Distal Major Axis", distal_major_axis(major_measurements["dip_tip_major_axis"])),
+        ("Proximal Major Axis", proximal_major_axis(major_measurements["pip_dip_major_axis"])),
+        ("DIP Major Axis", dip_major_axis(major_measurements["dip_width_major_axis"])),
+        ("Dist Plane Offset", major_measurements["dist_dip_tip_midpoint_mm"]),
+        ("Prox Plane Offset", major_measurements["dist_pip_dip_midpoint_mm"]),
+        ("Radial-Ulnar Offset", major_measurements["x_offset"])
     ]
     
     # Write the data to the CSV file (without header)
