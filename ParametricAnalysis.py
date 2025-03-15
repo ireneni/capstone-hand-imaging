@@ -47,6 +47,11 @@ def proximal_major_axis(proximal_width) -> float:
 def dip_major_axis(dip_width) -> float:
     return (dip_width / 2) - 0.4
 
+def largest_minor_axis(minor_measurements) -> float:
+    minor_max =  max(minor_measurements.values())
+    minor_max = minor_max/2
+    return minor_max
+
 # Write the results into a CSV file
 def write_to_csv(filename, output_dir):
 
@@ -65,7 +70,8 @@ def write_to_csv(filename, output_dir):
         ("DIP Major Axis", dip_major_axis(major_measurements["dip_width_major_axis"])),
         ("Dist Plane Offset", major_measurements["dist_dip_tip_midpoint_mm"]),
         ("Prox Plane Offset", major_measurements["dist_pip_dip_midpoint_mm"]),
-        ("Radial-Ulnar Offset", major_measurements["x_offset"])
+        ("Radial-Ulnar Offset", major_measurements["x_offset"]),
+        ("Largest Minor", largest_minor_axis(minor_measurements))
     ]
     
     # Write the data to the CSV file (without header)
