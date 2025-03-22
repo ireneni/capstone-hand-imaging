@@ -1,4 +1,5 @@
 import os
+import sys
 import cv2
 import numpy as np
 import math
@@ -372,32 +373,62 @@ def calculate_minor_axis_finger_dimensions(image_path, major_measurements):
     else:
         raise ValueError("Could not detect exactly one sticker in the image.")
 
-# Import image
-major_image_path = 'hand_pics/' + 'index.jpg'
-minor_image_path = 'hand_pics/' + 'index_side.jpg'
-
 # Scale width measurements to account for warp due to curvature
 def scale_down_five_percent(measurement):
     return ("{:0.2f}".format(measurement*0.95))
 
-# Calculate finger dimensions:
-major_measurements = calculate_major_axis_finger_dimensions(major_image_path)
-minor_measurements = calculate_minor_axis_finger_dimensions(minor_image_path, major_measurements)
+# # Import image
+# major_image_path = 'hand_pics/' + 'index.jpg'
+# minor_image_path = 'hand_pics/' + 'index_side.jpg'
 
-print("----------------Length measurements----------------")
-print("Length from tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"]))
-print("Length from DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"]))
-print("---------------------------------------------------")
-print("Length of 1/2 tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"] / 2))
-print("Length of 1/2 DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"] / 2))
-print("----------------Width measurements-----------------")
-print("Width at 1/2 DIP to tip for distal major axis (mm): ", scale_down_five_percent(major_measurements["dip_tip_major_axis"]))
-print("Width at DIP major axis (mm): ", scale_down_five_percent(major_measurements["dip_width_major_axis"]))
-print("Width at 1/2 PIP to DIP for proximal major axis (mm): ", scale_down_five_percent(major_measurements["pip_dip_major_axis"]))
-print("---------------------------------------------------")
-print("Width at 1/2 DIP to tip for distal minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_tip_minor_axis"]))
-print("Width at DIP minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_width_minor_axis"]))
-print("Width at 1/2 PIP to DIP for proximal minor axis (mm): ", scale_down_five_percent(minor_measurements["pip_dip_minor_axis"]))
-print("------------------------Angle----------------------")
-print("The bend angle in degrees: {:0.2f} {}".format(major_measurements["bend_angle_degrees"], major_measurements["bend_angle_direction"]))
-print("The tip to DIP x-offset (mm, positive x to the right): {:0.2f}".format(major_measurements["x_offset"]))
+# # Calculate finger dimensions:
+# major_measurements = calculate_major_axis_finger_dimensions(major_image_path)
+# minor_measurements = calculate_minor_axis_finger_dimensions(minor_image_path, major_measurements)
+
+def output_measurements(major_measurements, minor_measurements):
+    print("----------------Length measurements----------------")
+    print("Length from tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"]))
+    print("Length from DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"]))
+    print("---------------------------------------------------")
+    print("Length of 1/2 tip to DIP joint (mm): {:0.2f}".format(major_measurements["tip_dip_mm"] / 2))
+    print("Length of 1/2 DIP to PIP joint (mm): {:0.2f}".format(major_measurements["dip_pip_mm"] / 2))
+    print("----------------Width measurements-----------------")
+    print("Width at 1/2 DIP to tip for distal major axis (mm): ", scale_down_five_percent(major_measurements["dip_tip_major_axis"]))
+    print("Width at DIP major axis (mm): ", scale_down_five_percent(major_measurements["dip_width_major_axis"]))
+    print("Width at 1/2 PIP to DIP for proximal major axis (mm): ", scale_down_five_percent(major_measurements["pip_dip_major_axis"]))
+    print("---------------------------------------------------")
+    print("Width at 1/2 DIP to tip for distal minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_tip_minor_axis"]))
+    print("Width at DIP minor axis (mm): ", scale_down_five_percent(minor_measurements["dip_width_minor_axis"]))
+    print("Width at 1/2 PIP to DIP for proximal minor axis (mm): ", scale_down_five_percent(minor_measurements["pip_dip_minor_axis"]))
+    print("------------------------Angle----------------------")
+    print("The bend angle in degrees: {:0.2f} {}".format(major_measurements["bend_angle_degrees"], major_measurements["bend_angle_direction"]))
+    print("The tip to DIP x-offset (mm, positive x to the right): {:0.2f}".format(major_measurements["x_offset"]))
+
+def process_measurements(major_image_path, minor_image_path):
+    """Process measurements from local file paths."""
+    print("⏳ Measurement extraction in progress...")
+
+    # Ensure the files exist before proceeding
+    if not os.path.exists(major_image_path) or not os.path.exists(minor_image_path):
+        print("❌ Error: One or both image files not found.")
+        return
+
+    # Call existing functions with local paths
+    major_measurements = calculate_major_axis_finger_dimensions(major_image_path)
+    minor_measurements = calculate_minor_axis_finger_dimensions(minor_image_path, major_measurements)
+
+    # Print extracted measurements
+    output_measurements(major_measurements, minor_measurements)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("❌ Error: Expected 2 arguments (front_scan_path, side_scan_path)")
+        sys.exit(1)
+
+    front_scan_path = sys.argv[1]
+    side_scan_path = sys.argv[2]
+
+    print(f"🔹 Received file paths:\nFront: {front_scan_path}\nSide: {side_scan_path}")
+
+    # Call the function with the provided file paths
+    process_measurements(front_scan_path, side_scan_path)
