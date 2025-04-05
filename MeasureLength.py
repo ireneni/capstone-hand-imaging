@@ -188,6 +188,13 @@ def calculate_angle_with_direction(pip, dip, tip):
 
     return angle_degrees, direction
 
+def get_x_offset(angle_degrees, hypotenuse):
+    # Convert angle from degrees to radians
+    angle_radians = math.radians(angle_degrees)
+    # Calculate the opposite side
+    opposite = hypotenuse * math.sin(angle_radians)
+    return opposite
+
 def longest_continuous_segment(points, max_gap=2):
     """
     Finds the longest continuous segment in a list of points,
@@ -322,8 +329,7 @@ def calculate_major_axis_finger_dimensions(image_path):
         # Angle measure used for model development
         bend_angle_degrees, bend_angle_direction = calculate_angle_with_direction(tip["center"], dip["center"], pip["center"])
         # tip to DIP x-offset for parameterized model
-        x_offset = (tip["center"][0] - dip["center"][0]) * average(scale_tip["width"], scale_dip["width"])
-
+        x_offset = get_x_offset(bend_angle_degrees, (dip_tip_mm / 2))
 
         return {
             "tip_dip_mm": dip_tip_mm,
@@ -420,15 +426,17 @@ def process_measurements(major_image_path, minor_image_path):
     # Print extracted measurements
     output_measurements(major_measurements, minor_measurements)
 
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("❌ Error: Expected 2 arguments (front_scan_path, side_scan_path)")
-        sys.exit(1)
+# if __name__ == "__main__":
+#     if len(sys.argv) != 3:
+#         print("❌ Error: Expected 2 arguments (front_scan_path, side_scan_path)")
+#         sys.exit(1)
 
-    front_scan_path = sys.argv[1]
-    side_scan_path = sys.argv[2]
+#     front_scan_path = sys.argv[1]
+#     side_scan_path = sys.argv[2]
 
-    print(f"🔹 Received file paths:\nFront: {front_scan_path}\nSide: {side_scan_path}")
+#     print(f"🔹 Received file paths:\nFront: {front_scan_path}\nSide: {side_scan_path}")
 
-    # Call the function with the provided file paths
-    process_measurements(front_scan_path, side_scan_path)
+#     # Call the function with the provided file paths
+#     process_measurements(front_scan_path, side_scan_path)
+
+process_measurements("hand_pics/415900a5-f1d7-48e2-84ce-1d68c21780ef_Index_Finger_front.png", "hand_pics/415900a5-f1d7-48e2-84ce-1d68c21780ef_Index_Finger_side.png")
